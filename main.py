@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
-import pydeck as pdk
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import Draw
 
-# Load the crash data
+# Load crash data
 @st.cache_data
 def load_data():
     df = pd.read_csv("data/2019_2023_crash_simple.csv")
@@ -11,7 +13,7 @@ def load_data():
 
 df = load_data()
 
-st.title("Crash Data Map (2019–2023)")
+st.title("Crash Map Viewer (2019–2023)")
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -21,42 +23,45 @@ degrees = sorted(df["Degree of crash - detailed"].dropna().unique())
 selected_years = st.sidebar.multiselect("Reporting Year", years, default=years)
 selected_degrees = st.sidebar.multiselect("Degree of Crash", degrees, default=degrees)
 
-# Filter the DataFrame
+# Filter data
 filtered_df = df[
     (df["Reporting year"].isin(selected_years)) &
     (df["Degree of crash - detailed"].isin(selected_degrees))
 ]
 
-st.subheader(f"Total crashes: {len(filtered_df)}")
+# Setup folium map
+m = folium.Map(location=[filtered_df["Latitude"].mean(), filtered_df["Longitude"].mean()], zoom_start=10)
 
-# Map visualization
-st.pydeck_chart(pdk.Deck(
-    map_style="mapbox://styles/mapbox/light-v9",
-    initial_view_state=pdk.ViewState(
-        latitude=filtered_df["Latitude"].mean(),
-        longitude=filtered_df["Longitude"].mean(),
-        zoom=10,
-        pitch=0,
-    ),
-    layers=[
-        pdk.Layer(
-            "ScatterplotLayer",
-            data=filtered_df,
-            get_position="[Longitude, Latitude]",
-            get_color="[200, 30, 0, 160]",
-            get_radius=40,
-            pickable=True
-        ),
-    ],
-    tooltip={"text": "Crash ID: {Crash ID}\nYear: {Reporting year}\nSeverity: {Degree of crash - detailed}"}
-))
+# Add crash points
+for _, row in filtered_df.iterrows():
+    folium.CircleMarker(
+        location=(row["Latitude"], row["Longitude"]),
+        radius=4,
+        color="red",
+        fill=True,
+        fill_opacity=0.7,
+        popup=f"{row['Crash ID']} ({row['Reporting year']})",
+    ).add_to(m)
 
-# Use Streamlit's built-in map selection tool
-st.subheader("Click-and-drag to select points (below)")
+# Add drawing tool
+Draw(export=True).add_to(m)
 
-map_df = filtered_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
-st.map(data=map_df[["latitude", "longitude"]], use_container_width=True)
+# Show the map and capture drawn region
+st.subheader("Draw a shape on the map to select crashes")
+map_data = st_folium(m, width=700, height=500, returned_objects=["last_drawn_feature"])
 
-# Display table with filtered data
-st.subheader("Filtered Crash Data")
-st.dataframe(filtered_df)
+# Filter to points inside drawn region
+def point_in_geojson(point, geojson):
+    from shapely.geometry import Point, shape
+    return shape(geojson).contains(Point(point[1], point[0]))  # folium = [lat, lon]
+
+if map_data.get("last_drawn_feature"):
+    drawn_shape = map_data["last_drawn_feature"]["geometry"]
+    selected_df = filtered_df[
+        filtered_df.apply(lambda row: point_in_geojson((row["Latitude"], row["Longitude"]), drawn_shape), axis=1)
+    ]
+    st.success(f"{len(selected_df)} crashes inside selected area")
+    st.dataframe(selected_df)
+else:
+    st.info("Draw a rectangle or shape to filter crashes.")
+    st.dataframe(filtered_df)
