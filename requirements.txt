@@ -1,2 +1,5 @@
+streamlit
 pandas
-pydeck
+folium
+streamlit-folium
+shapely
