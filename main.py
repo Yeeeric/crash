@@ -5,6 +5,9 @@ from folium.plugins import Draw, MarkerCluster
 from streamlit_folium import st_folium
 from shapely.geometry import Point, shape
 
+# ✅ Must be first Streamlit command
+st.set_page_config(page_title="Crash Map Viewer", layout="wide")
+
 # Load crash data
 @st.cache_data
 def load_data():
@@ -14,7 +17,6 @@ def load_data():
 
 df = load_data()
 
-st.set_page_config(page_title="Crash Map Viewer", layout="wide")
 st.title("Crash Map Viewer (2019–2023)")
 
 # Sidebar filters
