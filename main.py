@@ -54,7 +54,8 @@ st.pydeck_chart(pdk.Deck(
 # Use Streamlit's built-in map selection tool
 st.subheader("Click-and-drag to select points (below)")
 
-selected = st.map(data=filtered_df[["Latitude", "Longitude"]], use_container_width=True)
+map_df = filtered_df.rename(columns={"Latitude": "latitude", "Longitude": "longitude"})
+st.map(data=map_df[["latitude", "longitude"]], use_container_width=True)
 
 # Display table with filtered data
 st.subheader("Filtered Crash Data")
